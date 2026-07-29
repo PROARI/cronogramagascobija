@@ -470,24 +470,16 @@ function updatePreview() {
   previewColumnsGrid.innerHTML = "";
   
   if (neighborhoods.length > 0) {
-    const maxRows = Math.min(4, neighborhoods.length); // limit rows to max 4
-    
-    // Set grid layout to column-flow
+    // Set grid layout to single vertical column flow
     previewColumnsGrid.style.display = "grid";
-    previewColumnsGrid.style.gridTemplateRows = `repeat(${maxRows}, 1fr)`;
-    previewColumnsGrid.style.gridAutoFlow = "column";
-    previewColumnsGrid.style.gridTemplateColumns = "none"; // reset horizontal
-    previewColumnsGrid.style.gap = "12px 24px";
+    previewColumnsGrid.style.gridTemplateRows = `repeat(${neighborhoods.length}, 1fr)`;
+    previewColumnsGrid.style.gridAutoFlow = "row";
+    previewColumnsGrid.style.gridTemplateColumns = "1fr";
+    previewColumnsGrid.style.gap = "12px";
     
-    // Calculate columns count
-    const colsCount = Math.ceil(neighborhoods.length / 4);
-    if (colsCount === 1) {
-      previewColumnsGrid.style.maxWidth = "500px";
-      previewColumnsGrid.style.margin = "0 auto";
-    } else {
-      previewColumnsGrid.style.maxWidth = "none";
-      previewColumnsGrid.style.margin = "0";
-    }
+    // Always a single column, center it with max width
+    previewColumnsGrid.style.maxWidth = "500px";
+    previewColumnsGrid.style.margin = "0 auto";
 
     neighborhoods.forEach(item => {
       const card = document.createElement("div");
@@ -680,34 +672,20 @@ function downloadJPG() {
   if (neighborhoods.length > 0) {
     ctx.save();
     
-    const maxRows = 4;
     const totalItems = neighborhoods.length;
-    const colsCount = Math.ceil(totalItems / maxRows);
-    const actualRows = Math.min(maxRows, totalItems);
+    const actualRows = totalItems;
     
-    const wrapperW = width * 0.90; // 90% space width
-    let wrapperX = width * 0.05; // Centered
-    const gapX = 40; // Column gap
     const gapY = 16; // Row gap
     const cardH = 52; // Row card height on high-res canvas
-    
-    let cardW;
-    if (colsCount === 1) {
-      cardW = 850; // set standard centered width for 1 col
-      wrapperX = (width - cardW) / 2;
-    } else {
-      cardW = (wrapperW - (gapX * (colsCount - 1))) / colsCount;
-    }
+    const cardW = 850; // set standard centered width for 1 col
+    const wrapperX = (width - cardW) / 2;
 
     const wrapperH = actualRows * cardH + (actualRows - 1) * gapY;
     const wrapperY = 1005 - wrapperH; // Positioned up from Y=1005 (bottom margin)
 
     neighborhoods.forEach((item, index) => {
-      const colIdx = Math.floor(index / maxRows);
-      const rowIdx = index % maxRows;
-      
-      const cardX = wrapperX + colIdx * (cardW + gapX);
-      const cardY = wrapperY + rowIdx * (cardH + gapY);
+      const cardX = wrapperX;
+      const cardY = wrapperY + index * (cardH + gapY);
       
       // Shadow for cards
       ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
