@@ -675,9 +675,9 @@ function downloadJPG() {
     const totalItems = neighborhoods.length;
     const actualRows = totalItems;
     
-    const gapY = 16; // Row gap
-    const cardH = 52; // Row card height on high-res canvas
-    const cardW = 850; // set standard centered width for 1 col
+    const gapY = 20; // Row gap
+    const cardH = 100; // Row card height on high-res canvas
+    const cardW = 1100; // set standard centered width for 1 col
     const wrapperX = (width - cardW) / 2;
 
     const wrapperH = actualRows * cardH + (actualRows - 1) * gapY;
@@ -698,7 +698,7 @@ function downloadJPG() {
       cardGrad.addColorStop(1, "rgba(25, 30, 45, 0.90)");
       ctx.fillStyle = cardGrad;
       
-      drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 6);
+      drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 12);
       ctx.fill();
 
       // Card Bottom Accent Border (Accent Theme Color)
@@ -706,9 +706,9 @@ function downloadJPG() {
       ctx.shadowOffsetY = 0;
       ctx.fillStyle = accentColor;
       
-      const borderH = 4;
+      const borderH = 8;
       ctx.beginPath();
-      drawRoundedRectBottom(ctx, cardX, cardY + cardH - borderH, cardW, borderH, 6);
+      drawRoundedRectBottom(ctx, cardX, cardY + cardH - borderH, cardW, borderH, 12);
       ctx.fill();
 
       // Card Text (Centered)
@@ -718,7 +718,7 @@ function downloadJPG() {
       
       const maxTextW = cardW * 0.9;
       let textToRender = displayedText;
-      let fontSz = 30; // standard font size for 52px card
+      let fontSz = 48; // standard font size for 100px card
       ctx.font = `700 ${fontSz}px ${fontName}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
