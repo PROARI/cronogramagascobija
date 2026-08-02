@@ -32,13 +32,18 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // Ignore non-GET requests and dynamic API sync requests
+  if (e.request.method !== 'GET' || e.request.url.includes('/api/')) {
+    return;
+  }
+  
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       if (cachedResponse) {
         // Try fetching updated content in the background
         fetch(e.request).then((networkResponse) => {
           if (networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, networkResponse));
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, networkResponse.clone()));
           }
         }).catch(() => { /* Ignore offline fetch errors */ });
         return cachedResponse;

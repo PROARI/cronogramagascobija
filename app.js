@@ -101,6 +101,12 @@ function syncFromRemote() {
       return res.json();
     })
     .then(remoteData => {
+      // If remote database is empty (e.g. fresh server load), seed it with current local data
+      if (remoteData && typeof remoteData === 'object' && !Array.isArray(remoteData) && Object.keys(remoteData).length === 0) {
+        saveScheduleData();
+        return;
+      }
+      
       const localStr = JSON.stringify(scheduleData);
       const remoteStr = JSON.stringify(remoteData);
       
@@ -222,6 +228,8 @@ function getNextScheduledDate(fromDate) {
   const fromKey = getDateKey(fromDate);
   const sortedDates = Object.keys(scheduleData)
     .filter(key => {
+      // Must be a valid YYYY-MM-DD date key
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
       // Must have items
       if (!scheduleData[key] || scheduleData[key].length === 0) return false;
       // Must be after fromDate
@@ -873,7 +881,11 @@ function setupAutocomplete(inputElement, index) {
     // Extract unique neighborhood list from all saved schedules
     const allUniqueBarrios = new Set();
     Object.values(scheduleData).forEach(barriosArr => {
-      barriosArr.forEach(b => allUniqueBarrios.add(b));
+      if (Array.isArray(barriosArr)) {
+        barriosArr.forEach(b => {
+          if (typeof b === 'string') allUniqueBarrios.add(b);
+        });
+      }
     });
     
     // Filter matches
