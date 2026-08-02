@@ -32,6 +32,7 @@ let currentCalMonth = 7; // August (0-indexed)
 let currentCalYear = 2026;
 let isAdminLoggedIn = false;
 let deferredPrompt = null; // PWA installation prompt
+let currentDisplayDate = null; // For the navigated public view date
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadData();
   setupEventListeners();
   renderPublicView();
+  renderAd();
   
   // Set current month/year based on the active display date
   const activeDateInfo = getActiveDateInfo();
@@ -56,7 +58,10 @@ document.addEventListener("DOMContentLoaded", () => {
   currentCalYear = activeDateInfo.date.getFullYear();
 });
 
-// Load schedule data from localStorage or seed
+const SYNC_URL = 'api/sync';
+let isSyncing = false;
+
+// Load schedule data from localStorage or seed, and sync with remote server
 function loadData() {
   const localRaw = localStorage.getItem("glp_schedule_data");
   if (localRaw) {
@@ -70,11 +75,86 @@ function loadData() {
     scheduleData = { ...SEED_DATA };
     localStorage.setItem("glp_schedule_data", JSON.stringify(scheduleData));
   }
+  
+  // Initial sync from remote
+  syncFromRemote();
+  
+  // Real-time polling check (every 10 seconds)
+  setInterval(syncFromRemote, 10000);
+  
+  // Sync when window becomes focused/visible
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      syncFromRemote();
+    }
+  });
 }
 
-// Save schedule data to localStorage
+// Fetch remote schedule changes
+function syncFromRemote() {
+  if (isSyncing) return;
+  isSyncing = true;
+  
+  fetch(SYNC_URL)
+    .then(res => {
+      if (!res.ok) throw new Error("Sync failed");
+      return res.json();
+    })
+    .then(remoteData => {
+      const localStr = JSON.stringify(scheduleData);
+      const remoteStr = JSON.stringify(remoteData);
+      
+      // Update only if data changed and remoteData is valid
+      if (localStr !== remoteStr && remoteData && typeof remoteData === 'object' && !Array.isArray(remoteData)) {
+        scheduleData = remoteData;
+        localStorage.setItem("glp_schedule_data", remoteStr);
+        
+        // Re-render views
+        renderPublicView();
+        renderAd();
+        
+        if (isAdminLoggedIn && typeof renderCalendar === 'function') {
+          renderCalendar();
+          if (currentSelectedDate) {
+            loadDayIntoEditor(currentSelectedDate);
+          }
+        }
+        
+        showToast("Cronograma actualizado en tiempo real 🔄");
+      }
+    })
+    .catch(err => {
+      console.error("Error during sync:", err);
+    })
+    .finally(() => {
+      isSyncing = false;
+    });
+}
+
+// Save schedule data locally and upload to remote JSON bin in real-time
 function saveScheduleData() {
-  localStorage.setItem("glp_schedule_data", JSON.stringify(scheduleData));
+  const localStr = JSON.stringify(scheduleData);
+  localStorage.setItem("glp_schedule_data", localStr);
+  
+  // Push to remote server
+  fetch(SYNC_URL, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: localStr
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Remote save failed");
+    return res.json();
+  })
+  .then(data => {
+    console.log("Real-time sync complete:", data);
+  })
+  .catch(err => {
+    console.error("Error syncing to server:", err);
+    showToast("Error de sincronización con servidor", true);
+  });
 }
 
 // ==========================================================================
@@ -135,25 +215,79 @@ function formatAdminDate(date) {
 // ==========================================================================
 // PUBLIC VIEW RENDERER
 // ==========================================================================
+// ==========================================================================
+// PUBLIC VIEW RENDERER
+// ==========================================================================
+function getNextScheduledDate(fromDate) {
+  const fromKey = getDateKey(fromDate);
+  const sortedDates = Object.keys(scheduleData)
+    .filter(key => {
+      // Must have items
+      if (!scheduleData[key] || scheduleData[key].length === 0) return false;
+      // Must be after fromDate
+      return key > fromKey;
+    })
+    .sort();
+  
+  if (sortedDates.length > 0) {
+    const [y, m, d] = sortedDates[0].split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return null;
+}
+
 function renderPublicView() {
-  const { date, isTomorrow } = getActiveDateInfo();
-  const dateKey = getDateKey(date);
+  const { date: defaultDate, isTomorrow: isDefaultTomorrow } = getActiveDateInfo();
+  
+  // If currentDisplayDate is not set, initialize it to the default active date
+  if (!currentDisplayDate) {
+    currentDisplayDate = defaultDate;
+  }
+  
+  const dateKey = getDateKey(currentDisplayDate);
+  const isDefaultActive = getDateKey(currentDisplayDate) === getDateKey(defaultDate);
   
   // Update header text
-  document.getElementById("active-date-display").textContent = formatSpanishDate(date);
+  document.getElementById("active-date-display").textContent = formatSpanishDate(currentDisplayDate);
   
   // Update status badge
   const indicatorText = document.getElementById("indicator-text");
   const scheduleIndicator = document.getElementById("schedule-indicator");
   
-  if (isTomorrow) {
-    indicatorText.textContent = "Cronograma de Mañana (14:00+)";
-    scheduleIndicator.classList.add("tomorrow");
-    scheduleIndicator.style.borderColor = "rgba(249, 115, 22, 0.4)";
+  if (isDefaultActive) {
+    if (isDefaultTomorrow) {
+      indicatorText.textContent = "Cronograma de Mañana (14:00+)";
+      scheduleIndicator.classList.add("tomorrow");
+      scheduleIndicator.style.borderColor = "rgba(249, 115, 22, 0.4)";
+    } else {
+      indicatorText.textContent = "Cronograma de Hoy";
+      scheduleIndicator.classList.remove("tomorrow");
+      scheduleIndicator.style.borderColor = "var(--glass-border)";
+    }
   } else {
-    indicatorText.textContent = "Cronograma de Hoy";
-    scheduleIndicator.classList.remove("tomorrow");
-    scheduleIndicator.style.borderColor = "var(--glass-border)";
+    // User navigated to a future date
+    indicatorText.textContent = "Cronograma Futuro";
+    scheduleIndicator.classList.add("tomorrow");
+    scheduleIndicator.style.borderColor = "var(--color-flame-glow)";
+  }
+  
+  // Update navigation buttons
+  const btnStart = document.getElementById("btn-nav-start");
+  const btnNext = document.getElementById("btn-nav-next");
+  
+  // 1. Return to start button
+  if (!isDefaultActive) {
+    btnStart.classList.remove("hidden");
+  } else {
+    btnStart.classList.add("hidden");
+  }
+  
+  // 2. Next day button
+  const nextDate = getNextScheduledDate(currentDisplayDate);
+  if (nextDate) {
+    btnNext.classList.remove("hidden");
+  } else {
+    btnNext.classList.add("hidden");
   }
   
   // Render barrios column
@@ -290,6 +424,95 @@ function setupEventListeners() {
   
   // Setup Share button functionality
   setupShareButton();
+  
+  // Setup Date Navigation buttons
+  setupDateNavigation();
+  
+  // Setup Download JPG button
+  setupDownloadButton();
+
+  // Save Ad Configuration control
+  const btnSaveAd = document.getElementById("btn-save-ad");
+  if (btnSaveAd) {
+    btnSaveAd.addEventListener("click", saveAdConfig);
+  }
+}
+
+// ==========================================================================
+// DATE NAVIGATION & JPG DOWNLOAD LOGIC
+// ==========================================================================
+function setupDateNavigation() {
+  const btnStart = document.getElementById("btn-nav-start");
+  const btnNext = document.getElementById("btn-nav-next");
+  
+  btnStart.addEventListener("click", () => {
+    const { date: defaultDate } = getActiveDateInfo();
+    currentDisplayDate = defaultDate;
+    renderPublicView();
+    showToast("Volviendo al cronograma de hoy/mañana");
+  });
+  
+  btnNext.addEventListener("click", () => {
+    const nextDate = getNextScheduledDate(currentDisplayDate);
+    if (nextDate) {
+      currentDisplayDate = nextDate;
+      renderPublicView();
+    }
+  });
+}
+
+function setupDownloadButton() {
+  const btnDownload = document.getElementById("btn-download-jpg");
+  btnDownload.addEventListener("click", () => {
+    downloadCronogramaJpg();
+  });
+}
+
+function downloadCronogramaJpg() {
+  const target = document.querySelector(".app-container");
+  const footer = document.querySelector(".app-footer");
+  const downloadBtn = document.querySelector(".download-container");
+  const navStart = document.getElementById("btn-nav-start");
+  const navNext = document.getElementById("btn-nav-next");
+  
+  // Temporarily hide elements during screenshot
+  if (footer) footer.style.display = "none";
+  if (downloadBtn) downloadBtn.style.display = "none";
+  if (navStart) navStart.style.display = "none";
+  if (navNext) navNext.style.display = "none";
+  
+  showToast("Generando imagen JPG...");
+  
+  html2canvas(target, {
+    backgroundColor: "#0b0f19",
+    scale: 2.5, // High resolution capture
+    useCORS: true,
+    logging: false
+  }).then(canvas => {
+    // Restore element visibility
+    if (footer) footer.style.display = "";
+    if (downloadBtn) downloadBtn.style.display = "";
+    if (navStart) navStart.style.display = "";
+    if (navNext) navNext.style.display = "";
+    
+    // Create download link
+    const link = document.createElement("a");
+    const dateKey = getDateKey(currentDisplayDate);
+    link.download = `cronograma_spc_${dateKey}.jpg`;
+    link.href = canvas.toDataURL("image/jpeg", 0.95);
+    link.click();
+    
+    showToast("Imagen descargada con éxito 📸");
+  }).catch(err => {
+    console.error("Error al generar imagen:", err);
+    showToast("Error al generar la imagen", true);
+    
+    // Restore element visibility on error
+    if (footer) footer.style.display = "";
+    if (downloadBtn) downloadBtn.style.display = "";
+    if (navStart) navStart.style.display = "";
+    if (navNext) navNext.style.display = "";
+  });
 }
 
 // ==========================================================================
@@ -418,6 +641,7 @@ function openAdminPanel() {
   
   renderCalendar();
   loadDayIntoEditor(currentSelectedDate);
+  loadAdIntoConfigurator(); // Populate ad config inputs
 }
 
 // ==========================================================================
@@ -759,4 +983,93 @@ function showToast(message, isError = false) {
   setTimeout(() => {
     toast.classList.add("hidden");
   }, 3000);
+}
+
+// ==========================================================================
+// ADVERTISING LOGIC & CONFIGURATION
+// ==========================================================================
+function renderAd() {
+  const adBanner = document.getElementById("ad-banner");
+  const adLink = document.getElementById("ad-banner-link");
+  const adContent = document.getElementById("ad-banner-content");
+  
+  const adConfig = scheduleData._ad_config;
+  
+  if (adConfig && adConfig.active && (adConfig.text || adConfig.imageUrl)) {
+    // Set link
+    if (adLink) {
+      if (adConfig.link) {
+        adLink.href = adConfig.link.startsWith("http") ? adConfig.link : "https://" + adConfig.link;
+        adLink.style.pointerEvents = "auto";
+      } else {
+        adLink.removeAttribute("href");
+        adLink.style.pointerEvents = "none";
+      }
+    }
+    
+    // Clear and build content dynamically for simplicity & reliability
+    adContent.innerHTML = "";
+    
+    if (adConfig.imageUrl) {
+      // Image Ad
+      const img = document.createElement("img");
+      img.className = "ad-banner-image";
+      img.src = adConfig.imageUrl;
+      img.alt = adConfig.text || "Anuncio Publicitario";
+      adContent.appendChild(img);
+    } else {
+      // Text Ad
+      const badge = document.createElement("span");
+      badge.className = "ad-badge-tag";
+      badge.textContent = "Anuncio";
+      
+      const txt = document.createElement("span");
+      txt.className = "ad-banner-text";
+      txt.id = "ad-banner-text";
+      txt.textContent = adConfig.text;
+      
+      adContent.appendChild(badge);
+      adContent.appendChild(txt);
+    }
+    
+    adBanner.classList.remove("hidden");
+  } else {
+    adBanner.classList.add("hidden");
+  }
+}
+
+function loadAdIntoConfigurator() {
+  const adConfig = scheduleData._ad_config || { active: false, text: "", link: "", imageUrl: "" };
+  const adEnable = document.getElementById("ad-enable");
+  const adText = document.getElementById("ad-text");
+  const adLink = document.getElementById("ad-link");
+  const adImage = document.getElementById("ad-image");
+  
+  if (adEnable) adEnable.checked = !!adConfig.active;
+  if (adText) adText.value = adConfig.text || "";
+  if (adLink) adLink.value = adConfig.link || "";
+  if (adImage) adImage.value = adConfig.imageUrl || "";
+}
+
+function saveAdConfig() {
+  const adEnable = document.getElementById("ad-enable");
+  const adText = document.getElementById("ad-text");
+  const adLink = document.getElementById("ad-link");
+  const adImage = document.getElementById("ad-image");
+  
+  const active = adEnable ? adEnable.checked : false;
+  const text = adText ? adText.value.trim() : "";
+  const link = adLink ? adLink.value.trim() : "";
+  const imageUrl = adImage ? adImage.value.trim() : "";
+  
+  scheduleData._ad_config = {
+    active,
+    text,
+    link,
+    imageUrl
+  };
+  
+  saveScheduleData();
+  renderAd();
+  showToast("Publicidad guardada y sincronizada 📣");
 }

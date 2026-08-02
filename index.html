@@ -14,6 +14,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="LOGO  SPC.png">
+  <!-- html2canvas for JPG downloads -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -37,11 +39,45 @@
       </div>
       
       <h1 class="main-title">CRONOGRAMA DE GLP</h1>
-      <h2 id="active-date-display" class="active-date">CARGANDO FECHA...</h2>
+      
+      <!-- Date Navigation with Arrow Buttons -->
+      <div class="date-navigation-container">
+        <!-- Return to Start Button -->
+        <button id="btn-nav-start" class="nav-arrow-btn hidden" title="Volver al principio">
+          <svg class="nav-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="19 12 5 12"></polyline>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>Inicio</span>
+        </button>
+        
+        <h2 id="active-date-display" class="active-date">CARGANDO FECHA...</h2>
+        
+        <!-- Next Day Button -->
+        <button id="btn-nav-next" class="nav-arrow-btn hidden" title="Siguiente día">
+          <span>Siguiente</span>
+          <svg class="nav-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="5 12 19 12"></polyline>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </div>
       
       <div id="schedule-indicator" class="indicator-badge">
         <span class="pulse-dot"></span>
         <span id="indicator-text">Actualizando...</span>
+      </div>
+
+      <!-- Download JPG button container -->
+      <div class="download-container">
+        <button id="btn-download-jpg" class="btn-download" title="Descargar Cronograma en JPG">
+          <svg class="download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Descargar Imagen</span>
+        </button>
       </div>
     </header>
 
@@ -54,6 +90,16 @@
         </div>
       </div>
     </main>
+
+    <!-- Public Ad Banner -->
+    <div id="ad-banner" class="ad-banner hidden">
+      <a id="ad-banner-link" href="#" target="_blank" rel="noopener">
+        <div id="ad-banner-content" class="ad-banner-content">
+          <span class="ad-badge-tag">Anuncio</span>
+          <span id="ad-banner-text" class="ad-banner-text">¡Tu publicidad aquí!</span>
+        </div>
+      </a>
+    </div>
 
     <!-- Footer Area -->
     <footer class="app-footer">
@@ -145,6 +191,28 @@
                 <button id="btn-export" class="btn btn-outline btn-sm">Exportar JSON</button>
                 <button id="btn-import-trigger" class="btn btn-outline btn-sm">Importar JSON</button>
                 <input type="file" id="import-file" class="hidden" accept=".json">
+              </div>
+            </div>
+            
+            <!-- Ad Configuration Section -->
+            <div class="data-backup-section ad-config-section">
+              <h5>Publicidad / Anuncios</h5>
+              <div class="ad-config-form">
+                <div class="form-group-checkbox">
+                  <label for="ad-enable" class="checkbox-label">
+                    <input type="checkbox" id="ad-enable"> Habilitar Publicidad
+                  </label>
+                </div>
+                <div class="form-group">
+                  <input type="text" id="ad-text" placeholder="Texto del anuncio..." autocomplete="off">
+                </div>
+                <div class="form-group">
+                  <input type="text" id="ad-link" placeholder="Enlace URL (opcional)..." autocomplete="off">
+                </div>
+                <div class="form-group">
+                  <input type="text" id="ad-image" placeholder="URL de la imagen (opcional)..." autocomplete="off">
+                </div>
+                <button id="btn-save-ad" class="btn btn-primary btn-sm btn-block">Guardar Publicidad</button>
               </div>
             </div>
           </div>
