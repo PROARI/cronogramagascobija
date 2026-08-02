@@ -17,6 +17,8 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml'
 };
 
+const clients = [];
+
 const server = http.createServer((req, res) => {
   // Clean URL to prevent directory traversal
   let safeUrl = req.url.split('?')[0];
@@ -70,11 +72,58 @@ const server = http.createServer((req, res) => {
           } else {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: true }));
+
+            // Notify all connected SSE clients of the updated data
+            try {
+              const remoteData = JSON.parse(body);
+              const payload = JSON.stringify({ type: 'update', data: remoteData });
+              clients.forEach(client => {
+                try {
+                  client.write(`data: ${payload}\n\n`);
+                } catch (writeErr) {
+                  console.error('Error writing to client SSE connection:', writeErr);
+                }
+              });
+            } catch (e) {
+              console.error('Failed to notify clients of update:', e);
+            }
           }
         });
       });
       return;
     }
+  }
+
+  // Intercept the SSE updates endpoint
+  if (safeUrl === '/api/updates') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    });
+
+    // Send a connection established message
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+    clients.push(res);
+
+    req.on('close', () => {
+      const index = clients.indexOf(res);
+      if (index !== -1) {
+        clients.splice(index, 1);
+      }
+    });
+    return;
   }
   
   // Static files server logic

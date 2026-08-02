@@ -60,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 const SYNC_URL = 'api/sync';
 let isSyncing = false;
+let sseSource = null;
 
 // Load schedule data from localStorage or seed, and sync with remote server
 function loadData() {
@@ -79,8 +80,11 @@ function loadData() {
   // Initial sync from remote
   syncFromRemote();
   
-  // Real-time polling check (every 10 seconds)
-  setInterval(syncFromRemote, 10000);
+  // Set up real-time SSE stream
+  setupSSE();
+  
+  // Fallback check (every 30 seconds instead of 10)
+  setInterval(syncFromRemote, 30000);
   
   // Sync when window becomes focused/visible
   document.addEventListener("visibilitychange", () => {
@@ -88,6 +92,58 @@ function loadData() {
       syncFromRemote();
     }
   });
+}
+
+function setupSSE() {
+  if (typeof EventSource === 'undefined') {
+    console.warn("EventSource no está soportado en este navegador. Usando sondeo (polling) de respaldo.");
+    return;
+  }
+  
+  if (sseSource) {
+    sseSource.close();
+  }
+  
+  const sseUrl = window.location.origin + '/api/updates';
+  sseSource = new EventSource(sseUrl);
+  
+  sseSource.onmessage = function(event) {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === 'update' && message.data) {
+        const remoteData = message.data;
+        const localStr = JSON.stringify(scheduleData);
+        const remoteStr = JSON.stringify(remoteData);
+        
+        // Update only if data changed and remoteData is valid
+        if (localStr !== remoteStr && remoteData && typeof remoteData === 'object' && !Array.isArray(remoteData)) {
+          scheduleData = remoteData;
+          localStorage.setItem("glp_schedule_data", remoteStr);
+          
+          // Re-render views
+          renderPublicView();
+          renderAd();
+          
+          if (isAdminLoggedIn && typeof renderCalendar === 'function') {
+            renderCalendar();
+            if (currentSelectedDate) {
+              loadDayIntoEditor(currentSelectedDate);
+            }
+          }
+          
+          showToast("Cronograma actualizado en tiempo real 🔄");
+        }
+      }
+    } catch (e) {
+      console.error("Error al procesar mensaje de tiempo real:", e);
+    }
+  };
+  
+  sseSource.onerror = function(err) {
+    console.warn("Error en la conexión en tiempo real (SSE). Reintentando en 5 segundos...", err);
+    sseSource.close();
+    setTimeout(setupSSE, 5000);
+  };
 }
 
 // Fetch remote schedule changes
