@@ -1,0 +1,17 @@
+{
+  "short_name": "SPC Cronograma",
+  "name": "SPC Cronograma de GLP",
+  "icons": [
+    {
+      "src": "LOGO  SPC.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./",
+  "background_color": "#0b0f19",
+  "theme_color": "#4364F7",
+  "display": "standalone",
+  "orientation": "portrait"
+}
