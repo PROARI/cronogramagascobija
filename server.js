@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const PORT = 8005;
 const PUBLIC_DIR = __dirname; // Serve files from the current directory
@@ -101,5 +102,27 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}/`);
-  console.log(`To access from other devices on the same network, use the computer's local IP address.`);
+  
+  // Detect local network IP addresses
+  const networkInterfaces = os.networkInterfaces();
+  const localIPs = [];
+  
+  for (const interfaceName in networkInterfaces) {
+    const interfaces = networkInterfaces[interfaceName];
+    for (const iface of interfaces) {
+      // Look for non-internal IPv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        localIPs.push(iface.address);
+      }
+    }
+  }
+  
+  if (localIPs.length > 0) {
+    console.log(`To access from other devices on the same network, use:`);
+    localIPs.forEach(ip => {
+      console.log(`  http://${ip}:${PORT}/`);
+    });
+  } else {
+    console.log(`To access from other devices on the same network, use the computer's local IP address.`);
+  }
 });
